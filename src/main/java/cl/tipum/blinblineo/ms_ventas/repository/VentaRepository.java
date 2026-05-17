@@ -12,4 +12,7 @@ public interface VentaRepository extends JpaRepository<Venta, Long> {
     
     // Método para búsquedas individuales
     Venta findByFolioBoleta(String folioBoleta);
+
+    // Método para eliminar por folio
+    void deleteByFolioBoleta(String folioBoleta);
 }

@@ -21,13 +21,13 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 @Transactional
 public class VentaService {
-    // Inyección de dependencias
+    // inyección de dependencias
     private final VentaRepository ventaRepository;
-    private final VentaDTOMapper ventaDTOMapper; // El nuevo traductor
+    private final VentaDTOMapper ventaDTOMapper; // traductor
 
     public List<VentaResponseDTO> obtenerTodasLasVentas() {
         List<Venta> ventas = ventaRepository.findAll();
-        // Validación del profe: Evitar resp vacías
+        // validación del profe: para evitar resp vacías
         if (ventas.isEmpty()) {
             throw new RecursoNoEncontradoException("No se encontraron ventas registradas.");
         }
@@ -38,7 +38,7 @@ public class VentaService {
     }
 
     public VentaResponseDTO procesarVenta(VentaRequestDTO request) {
-        // Validación del profe: Evitar duplicados
+        // validación del profe: para evitar duplicados
         if (ventaRepository.existsByFolioBoleta(request.getFolioBoleta())) {
             throw new RecursoYaExisteException("Ya existe una venta con el folio: " + request.getFolioBoleta());
         }
@@ -62,7 +62,74 @@ public class VentaService {
 
         nuevaVenta.setDetalles(detalles);
         
-        // Guarda y devuelve traducido a DTO
+        // guarda y devuelve traducido a DTO
         return ventaDTOMapper.toDTO(ventaRepository.save(nuevaVenta));
+    }
+
+    public VentaResponseDTO obtenerVentaPorFolio(String folioBoleta) {
+        // busqueda por folioBoleta
+        cl.tipum.blinblineo.ms_ventas.model.Venta venta = ventaRepository.findByFolioBoleta(folioBoleta);
+
+        // por si no existe
+        if (venta == null) {
+            throw new RecursoNoEncontradoException("Venta no encontrada con el número de folio: " + folioBoleta);
+        }
+
+        // si existe, se devueve convertido a DTO para proteger la BD
+        return ventaDTOMapper.toDTO(venta);
+    }
+
+    // actualizar la venta completa mapeando un DTO entrante
+    public VentaResponseDTO actualizarVenta(VentaRequestDTO request) {
+        Venta ventaExistente = ventaRepository.findByFolioBoleta(request.getFolioBoleta());
+        
+        if (ventaExistente == null || !ventaExistente.getFolioBoleta().equals(request.getFolioBoleta())) {
+            throw new RecursoNoEncontradoException("Número de folio incorrecto o venta no encontrada.");
+        }
+
+        Venta ventaActualizada = Venta.builder()
+                .id(ventaExistente.getId()) // línea clave para que JPA haga un UPDATE y no un INSERT
+                .idCliente(request.getIdCliente())
+                .fechaVenta(ventaExistente.getFechaVenta())
+                .montoTotal(request.getMontoTotal())
+                .estado(ventaExistente.getEstado()) // mantiene el estado
+                .folioBoleta(request.getFolioBoleta())
+                .build();
+
+        // mapea los nuevos detalles de productos
+        List<DetalleVenta> nuevosDetalles = request.getDetalles().stream()
+                .map(d -> DetalleVenta.builder()
+                        .venta(ventaActualizada)
+                        .skuProducto(d.getSkuProducto())
+                        .cantidad(d.getCantidad())
+                        .precioUnitario(d.getPrecioUnitario())
+                        .build())
+                .collect(Collectors.toList());
+
+        ventaActualizada.setDetalles(nuevosDetalles);
+
+        return ventaDTOMapper.toDTO(ventaRepository.save(ventaActualizada));
+    }
+
+    // actualiza únicamente el estado de la venta (Estilo @RequestParam)
+    public VentaResponseDTO actualizarEstadoVenta(String folioBoleta, String estado) {
+        Venta ventaExistente = ventaRepository.findByFolioBoleta(folioBoleta);
+        
+        if (ventaExistente == null) {
+            throw new RecursoNoEncontradoException("Número de folio incorrecto.");
+        }
+
+        ventaExistente.setEstado(estado);
+        return ventaDTOMapper.toDTO(ventaRepository.save(ventaExistente));
+    }
+
+    // eliminar una venta por su folio
+    public boolean eliminarVenta(String folioBoleta) {
+        if (!ventaRepository.existsByFolioBoleta(folioBoleta)) {
+            throw new RecursoNoEncontradoException("Venta no encontrada para eliminar.");
+        }
+
+        ventaRepository.deleteByFolioBoleta(folioBoleta);
+        return true;
     }
 }
