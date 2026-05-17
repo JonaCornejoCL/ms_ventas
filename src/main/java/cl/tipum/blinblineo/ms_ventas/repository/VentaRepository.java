@@ -7,4 +7,9 @@ import cl.tipum.blinblineo.ms_ventas.model.Venta;
 
 @Repository
 public interface VentaRepository extends JpaRepository<Venta, Long> {
+    // Método  para validar duplicados
+    boolean existsByFolioBoleta(String folioBoleta);
+    
+    // Método para búsquedas individuales
+    Venta findByFolioBoleta(String folioBoleta);
 }
